@@ -1,12 +1,11 @@
 import React from "react";
-import { useRef, useEffect } from "react";
-import jsPDF from "jspdf";
-
+import { useState, useRef, useEffect, useMemo } from "react";
 function cmToPixel(cm: number): number {
   return Math.round(118 * cm);
 }
 
 export default function Canvas({
+  canvasRef,
   width,
   height,
   image,
@@ -18,6 +17,7 @@ export default function Canvas({
   x2Offset,
   backgroundImage,
 }: {
+  canvasRef: React.RefObject<HTMLCanvasElement>;
   width: number;
   height: number;
   image: string;
@@ -33,53 +33,59 @@ export default function Canvas({
     width: cmToPixel(width),
     height: cmToPixel(height),
   };
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isLogoLoaded, setIsLogoLoaded] = useState(false);
 
-  const logo = new Image();
-  logo.src = image;
-  const _backgroundImage = new Image();
-  if (typeof backgroundImage === "string") {
-    _backgroundImage.src = backgroundImage;
-  }
+  // Memoize the logo image to prevent it from being recreated on every render
+  const logo = useMemo(() => {
+    const img = new Image();
+    setIsLogoLoaded(false);
+    img.src = image;
+    img.onload = () => {
+      setIsLogoLoaded(true);
+    }
+    return img;
+  }, [image]);
+  
+  
+
+  // Memoize the background image to prevent it from being recreated on every render
+  const _backgroundImage = useMemo(() => {
+    const img = new Image();
+    if (typeof backgroundImage === "string") {
+      img.src = backgroundImage;
+    }
+    return img;
+  }, [backgroundImage]);
+
 
   const _scale = logoTargetWidth / (logo.width ?? logoTargetWidth);
 
-  function downloadCanvas() {
-    const canvas = document.getElementById("mycanvas") as HTMLCanvasElement;
-    const dataUrl = canvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.href = dataUrl;
-    link.download = "preview.png";
-    link.click();
+  const screenWidth = window.screen.width;
+  const screenHeight = window.screen.height
+  let scaleFactor = 0.24
+  // Responsive scale factor for canvas preview
+  if (screenWidth > 900) {
+    const canvasPrevWidth = screenHeight * 0.67;
+    scaleFactor =  canvasPrevWidth / 4130;
+  } else {
+    const canvasPrevWidth = screenWidth * 0.80;
+    scaleFactor =  canvasPrevWidth / 4130;
   }
 
-  function downloadCanvasAsPdf() {
-    if (canvasRef.current) {
-      const canvas = document.getElementById("mycanvas") as HTMLCanvasElement;
-      const imgData = canvas.toDataURL("image/png");
+  //coordinate system size
+  const coordSystemWidth = canvasSize.width * scaleFactor + 7;
+  const coordSystemHeight = canvasSize.height * scaleFactor + 7 ;
+  const coordinateSystemDivStyle = {
+    height: `${coordSystemHeight}px`,
+    width: `${coordSystemWidth}px`,
+  };
 
-      // Create a PDF document
-      const pdf = new jsPDF({
-        unit: "px",
-        format: [canvas.width, canvas.height],
-      });
-
-      pdf.addImage(
-        imgData,
-        "PNG",
-        0,
-        0,
-        canvas.width,
-        canvas.height,
-        undefined,
-        "SLOW",
-      );
-
-      // Download the PDF
-      pdf.save("export.pdf");
-    }
+  const coordinateSystemContainerDivStyle = {
+    height: `${4130 * scaleFactor + 8}px`,
+    width: `${4130 * scaleFactor + 8}px`,
   }
+
 
   useEffect(() => {
     if (previewCanvasRef.current && canvasRef.current) {
@@ -115,10 +121,10 @@ export default function Canvas({
           }
         }
         ctx.restore();
+        
 
-        const scaleFactor = 0.24;
         const scaledWidth = canvasRef.current.width * scaleFactor;
-        const scaledHeight = canvasRef.current.height * scaleFactor;
+        const scaledHeight = canvasRef.current.height * scaleFactor;      
 
         // Set preview canvas size
         previewCanvasRef.current.width = scaledWidth;
@@ -127,9 +133,12 @@ export default function Canvas({
         // Scale and draw the original canvas content on the preview canvas
         previewCtx.scale(scaleFactor, scaleFactor);
         previewCtx.drawImage(canvasRef.current, 0, 0);
+        
       }
     }
   }, [
+    scaleFactor,
+    canvasRef,
     width,
     height,
     image,
@@ -145,6 +154,7 @@ export default function Canvas({
     xGap,
     yGap,
     x2Offset,
+    isLogoLoaded
   ]);
 
   return (
@@ -156,26 +166,16 @@ export default function Canvas({
         width={canvasSize.width}
         height={canvasSize.height}
       />
-      <canvas
-        id="preview-canvas"
-        ref={previewCanvasRef}
-        width={800}
-        height={600}
-      />
-      <div className="fixed right-14 bottom-5">
-        <div className="flex gap-3">
-          <button
-            className="text-blue-700 hover:text-white border border-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 dark:border-blue-500 dark:text-blue-500 dark:hover:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-800"
-            onClick={downloadCanvasAsPdf}
-          >
-            Download PDF
-          </button>
-          <button
-            className="text-blue-700 hover:text-white border border-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center me-2 mb-2 dark:border-blue-500 dark:text-blue-500 dark:hover:text-white dark:hover:bg-blue-500 dark:focus:ring-blue-800"
-            onClick={downloadCanvas}
-          >
-            Download PNG
-          </button>
+      <div className="coordinate-system-container" style={coordinateSystemContainerDivStyle}>
+        <div className="coordinate-system" style={coordinateSystemDivStyle}>
+          <span className="y-label">{height + 'cm'}</span>
+          <span className="x-label">{width + 'cm'}</span>
+          <canvas
+            id="preview-canvas"
+            ref={previewCanvasRef}
+            width={800}
+            height={600}
+          />
         </div>
       </div>
     </>
