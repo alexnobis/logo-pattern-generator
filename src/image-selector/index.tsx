@@ -15,7 +15,7 @@ export function ImageSelector({
     }
   }
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-9">
       <div>Hintergrundbild</div>
       <div className="overflow-x-scroll pb-4 image-carousel">
         <div className="flex gap-3">
